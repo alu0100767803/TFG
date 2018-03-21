@@ -36,7 +36,7 @@ while True:
                 for comment in comments['data']:
                     comment['post_id'] = element['id']
                     collection_comments.insert(comment)
-                comments = requests.get(this_comment_url + '&after' + comments['paging']['cursors']['after'], params = params).json()
+                comments = requests.get(this_comment_url + '&after=' + comments['paging']['cursors']['after'], params = params).json()
         ####Vamos a la siguiente página en feed
         posts = requests.get(posts['paging']['next']).json()
     except KeyError:
