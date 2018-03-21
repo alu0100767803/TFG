@@ -4,4 +4,6 @@
 requests
 pymongo
 pandas
+requests_oauthlib
+nltk
 

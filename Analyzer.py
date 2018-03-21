@@ -1,7 +1,14 @@
+#! /usr/bin/env python
+# -*- coding: utf-8 -*-
+
 import requests
 import json
 import pymongo
 import pandas
+import re
+import nltk
+import numpy
+import matplotlib
 
 from pymongo import MongoClient
 from requests_oauthlib import OAuth2
@@ -75,3 +82,77 @@ df_comments = pandas.DataFrame(comments_data)
 df_comments.columns = ['message', 'creates_time', 'post_id']
 
 #Feature extraction
+
+
+#Funciones
+def preprocess(text):
+    
+    #Limpieza básica
+    text  = text.strip()
+    text = re.sub(r'[^\w\s]','',text)
+    text = text.lower()
+
+    #
+    tokens = nltk.word_tokenize(text)
+
+    return(tokens)
+
+def get_hashtags(text):
+    hashtags = re.findall(r"#(\w+)", text)
+    return(hashtags)
+
+def tag_tokens(preprocessed_tokens):
+    pos = nltk.pos_tag(preprocessed_tokens)
+    return(pos)
+
+def get_keywords(tagged_tokens, pos='all'):
+
+    if(pos == 'all'):
+        lst_pos = ('NN','JJ','VB')
+    elif(pos == 'nouns'):
+        lst_pos = 'NN'
+    elif(pos == 'verbs'):
+        lst_pos = 'VB'
+    elif(pos == 'adjectives'):
+        lst_pos == 'JJ'
+    else:
+        lst_pos = ('NN','JJ','VB')
+
+    keywords = [tup[0] for tup in tagged_tokens if tup[1].startswitch(lst_pos)]
+    return(keywords)
+
+def get_noun_phrases(tagged_tokens):
+
+    grammar = "NP: {<DT>?<JJ>*<NN>}"
+    cp = nltk.RegexpParser(grammar)
+    tree = cp.parse(tagged_tokens)
+
+    result = []
+    for subtree in tree.subreees(filter=lambda t: t.label() == 'NP'):
+        #Solo tomamos frases, no palabras sueltas
+        if(len(subtree.leaves() > 1)):
+            outputs = [tup[0] for tup in subtree.leaves()]
+            outputs = " ".join(outputs)
+            result.append(outputs)
+    return(result)
+
+def execute_pipeline(dataframe):
+    #
+    dataframe['hashtags'] = dataframe.apply(lambda x: get_hashtags(x['message']), axis=1)
+    #
+    dataframe['preprocessed'] = dataframe.apply(lambda x: preprocess(x['message']), axis=1)
+    #
+    dataframe['tagged'] = dataframe.apply(lambda x: tag_tokens(x['preprocessed']), axis=1)
+    #
+    dataframe['keywords'] = dataframe.apply(lambda x: get_keywords(x['tagged'], 'all'), axis=1)
+    #
+    dataframe['noun_phrases'] = dataframe.apply(lambda x: get_noun_phrases(x['tagged']), axis=1)
+
+    return(dataframe)
+
+
+df_posts = execute_pipeline(df_posts)
+df_comments = execute_pipeline(df_comments)
+
+#Content analysis
+
