@@ -1,6 +1,6 @@
 # Trabajo de Fin de Grado
 
-#### Monitorización en Facebook de la actividad de la marca, la popularidad y las emociones
+## Monitorización en Facebook de la actividad de la marca, la popularidad y las emociones
 
 
 
@@ -8,7 +8,7 @@
 
 * Jorge Alonso Hernández
 * alu0100767803@ull.edu.es
-* Universidad de La Laguna, Escuela Superior de Ingeniería y tecnología, Itinerario de Cómputación 
+* Universidad de La Laguna, Escuela Superior de Ingeniería y tecnología, Itinerario de Computación 
 
 ### Tutor
 
