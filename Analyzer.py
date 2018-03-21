@@ -1,6 +1,7 @@
 import requests
 import json
 import pymongo
+import pandas
 
 from pymongo import MongoClient
 from requests_oauthlib import OAuth2
@@ -10,10 +11,13 @@ client = MongoClient('localhost:27017')
 db = client.db_analyzer
 db_analyzer = db.analyzer
 collection_posts = db_analyzer.posts
-collection_comments = db_analyzer.comments 
+collection_comments = db_analyzer.comments
+
+id = "tenerifevacanze"              # id de la página que va a ser analizada
 
 url = 'https://graph.facebook.com/v2.12/'
-page_url = 'https://graph.facebook.com/v2.12/Google/feed?fields=id,message,reactions,shares,from,caption,created_time,likes.summary(true)'
+page_url = 'https://graph.facebook.com/v2.12/%s/feed?fields=id,message,reactions,shares,from,caption,created_time,likes.summary(true)' %id
+print(page_url)
 # Todos los campos deben de ser especificados
 comments_url = 'https://graph.facebook.com/v2.12/{post_id}/comments?filter=stream&limit=100'
 
@@ -22,8 +26,11 @@ params = {'access_token' : 'EAACQFfa9JeIBAKK0ZCX9x7vGxtDjfDjLLo5W8qVz5REnvqr30DS
 posts = requests.get(page_url, params = params)
 posts = posts.json()
 
+#Data extraction
+
 while True:
     try:
+        print("Recopilando datos...")
     ### Recupera un post
         for element in posts['data']:
             collection_posts.insert(element)
@@ -41,3 +48,30 @@ while True:
         posts = requests.get(posts['paging']['next']).json()
     except KeyError:
         break
+
+print("Datos recopilados")
+
+# Data pull
+
+posts_data = []
+comments_data = []
+
+for doc in collection_posts.find({}):
+    try:
+        posts_data.append((doc['message'], doc['created_time'], doc['likes']['summary']['total_count'], doc['shares']['count'], doc['id']))
+    except:
+        #print("No message")
+        pass
+    
+for comment in collection_comments.find({}):
+    try:
+        comments_data.append((comment['message'], comment['created_time'], comment['post_id']))
+    except:
+        pass
+
+df_posts = pandas.DataFrame(posts_data)
+df_posts.columns = ['message', 'created_time', 'likes', 'shares', 'post_id']
+df_comments = pandas.DataFrame(comments_data)
+df_comments.columns = ['message', 'creates_time', 'post_id']
+
+#Feature extraction

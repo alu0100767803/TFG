@@ -1,0 +1,7 @@
+#pip install -r requeriments.txt
+#Fichero con las librerias necesarias para el proyecto
+
+requests
+pymongo
+pandas
+
