@@ -28,12 +28,12 @@ print(page_url)
 # Todos los campos deben de ser especificados
 comments_url = 'https://graph.facebook.com/v2.12/{post_id}/comments?filter=stream&limit=100'
 
-#Variable con el token de acceso de Facebook
+# Variable con el token de acceso de Facebook
 params = {'access_token' : 'EAACQFfa9JeIBAKK0ZCX9x7vGxtDjfDjLLo5W8qVz5REnvqr30DSEy4EgrZAU0RLG0AxYo2UFdfU3hUqtm3T3dEys1eZC1BDq1IRnfpZAKwDDVi6n0LqAYKgOazNbj26FOD7zPGhZCz3RlFw4ADrqIHLC3yc1m7EEZD'}
 posts = requests.get(page_url, params = params)
 posts = posts.json()
 
-#Data extraction
+# Data extraction
 
 while True:
     try:
@@ -51,7 +51,7 @@ while True:
                     comment['post_id'] = element['id']
                     collection_comments.insert(comment)
                 comments = requests.get(this_comment_url + '&after=' + comments['paging']['cursors']['after'], params = params).json()
-        ####Vamos a la siguiente página en feed
+        #### Vamos a la siguiente página en feed
         posts = requests.get(posts['paging']['next']).json()
     except KeyError:
         break
@@ -81,30 +81,36 @@ df_posts.columns = ['message', 'created_time', 'likes', 'shares', 'post_id']
 df_comments = pandas.DataFrame(comments_data)
 df_comments.columns = ['message', 'creates_time', 'post_id']
 
-#Feature extraction
+# Feature extraction
 
 
-#Funciones
+# Funciones
+
+# Limpia comentarios y posts
 def preprocess(text):
     
-    #Limpieza básica
+    # Limpieza básica
+    # Limpia de espacios y signos de puntuación, y convierte en minúscula
     text  = text.strip()
     text = re.sub(r'[^\w\s]','',text)
     text = text.lower()
 
-    #
-    tokens = nltk.word_tokenize(text)
+    # Divide en tokens
+    tokens = nltk.word_tokenize(text) 
 
     return(tokens)
 
+# Obtiene los hastags de los mensajes
 def get_hashtags(text):
     hashtags = re.findall(r"#(\w+)", text)
     return(hashtags)
 
+# 
 def tag_tokens(preprocessed_tokens):
     pos = nltk.pos_tag(preprocessed_tokens)
     return(pos)
 
+# 
 def get_keywords(tagged_tokens, pos='all'):
 
     if(pos == 'all'):
@@ -118,7 +124,7 @@ def get_keywords(tagged_tokens, pos='all'):
     else:
         lst_pos = ('NN','JJ','VB')
 
-    keywords = [tup[0] for tup in tagged_tokens if tup[1].startswitch(lst_pos)]
+    keywords = [tup[0] for tup in tagged_tokens if tup[1].startswith(lst_pos)]
     return(keywords)
 
 def get_noun_phrases(tagged_tokens):
@@ -128,9 +134,9 @@ def get_noun_phrases(tagged_tokens):
     tree = cp.parse(tagged_tokens)
 
     result = []
-    for subtree in tree.subreees(filter=lambda t: t.label() == 'NP'):
+    for subtree in tree.subtrees(filter=lambda t: t.label() == 'NP'):
         #Solo tomamos frases, no palabras sueltas
-        if(len(subtree.leaves() > 1)):
+        if(len(subtree.leaves()) > 1):
             outputs = [tup[0] for tup in subtree.leaves()]
             outputs = " ".join(outputs)
             result.append(outputs)
@@ -156,3 +162,14 @@ df_comments = execute_pipeline(df_comments)
 
 #Content analysis
 
+def viz_wordcloud(dataframe, column_name):
+    lst_tokens = list(itertools.chain.from_iterable(dataframe[column_name]))
+    lst_phrases = [phrase.replace(" ", "_") for phrase in lst_tokens]
+    wordcloud = Wordcloud(font_path='/Library/Fonts/Verdana.ttf', background_color="White", max_words=2000, max_font_size=40, random_state=42).generate(" ".join(lst_phrases))
+
+    #
+    #
+    plt.figure()
+    plt.imshow(wordcloud)
+    plt.axis("off")
+    plt.show
