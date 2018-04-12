@@ -8,4 +8,5 @@ requests_oauthlib
 nltk
 numpy
 matplotlib
+tqdm
 

@@ -12,6 +12,7 @@ import matplotlib
 
 from pymongo import MongoClient
 from requests_oauthlib import OAuth2
+from tqdm import tqdm
 
 #Base de datos 
 client = MongoClient('localhost:27017')
@@ -38,7 +39,7 @@ posts = posts.json()
 while True:
     try:
         print("Recopilando datos...")
-    ### Recupera un post
+        ### Recupera un post
         for element in posts['data']:
             collection_posts.insert(element)
             #### Recupera todos los comentarios de ese post
@@ -53,7 +54,8 @@ while True:
                 comments = requests.get(this_comment_url + '&after=' + comments['paging']['cursors']['after'], params = params).json()
         #### Vamos a la siguiente página en feed
         posts = requests.get(posts['paging']['next']).json()
-    except KeyError:
+    except KeyError as e:
+        print(e)
         break
 
 print("Datos recopilados")
@@ -67,7 +69,7 @@ for doc in collection_posts.find({}):
     try:
         posts_data.append((doc['message'], doc['created_time'], doc['likes']['summary']['total_count'], doc['shares']['count'], doc['id']))
     except:
-        #print("No message")
+        print("No message")
         pass
     
 for comment in collection_comments.find({}):
@@ -79,7 +81,7 @@ for comment in collection_comments.find({}):
 df_posts = pandas.DataFrame(posts_data)
 df_posts.columns = ['message', 'created_time', 'likes', 'shares', 'post_id']
 df_comments = pandas.DataFrame(comments_data)
-df_comments.columns = ['message', 'creates_time', 'post_id']
+df_comments.columns = ['message', 'created_time', 'post_id']
 
 # Feature extraction
 
@@ -161,7 +163,7 @@ df_posts = execute_pipeline(df_posts)
 df_comments = execute_pipeline(df_comments)
 
 #Content analysis
-
+ 
 def viz_wordcloud(dataframe, column_name):
     lst_tokens = list(itertools.chain.from_iterable(dataframe[column_name]))
     lst_phrases = [phrase.replace(" ", "_") for phrase in lst_tokens]
