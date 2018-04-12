@@ -122,7 +122,7 @@ def get_keywords(tagged_tokens, pos='all'):
     elif(pos == 'verbs'):
         lst_pos = 'VB'
     elif(pos == 'adjectives'):
-        lst_pos == 'JJ'
+        lst_pos = 'JJ'
     else:
         lst_pos = ('NN','JJ','VB')
 
