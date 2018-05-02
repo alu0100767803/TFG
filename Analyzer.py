@@ -21,7 +21,16 @@ db_analyzer = db.analyzer
 collection_posts = db_analyzer.posts
 collection_comments = db_analyzer.comments
 
+#Limpiamos la base de datos para que no se repliquen los datos o interfieran con los de otras páginas
+collection_posts.delete_many({})
+collection_comments.delete_many({})
+
 id = "tenerifevacanze"              # id de la página que va a ser analizada
+"""Páginas usadas
+ * tenerifevacanze
+ * VisitTenerifeES"""
+
+
 
 url = 'https://graph.facebook.com/v2.12/'
 page_url = 'https://graph.facebook.com/v2.12/%s/feed?fields=id,message,reactions,shares,from,caption,created_time,likes.summary(true)' %id
@@ -41,7 +50,7 @@ while True:
         print("Recopilando datos...")
         ### Recupera un post
         for element in posts['data']:
-            collection_posts.insert(element)
+            collection_posts.insert_one(element)
             #### Recupera todos los comentarios de ese post
             this_comment_url = comments_url.replace("{post_id}", element['id'])
             comments = requests.get(this_comment_url, params = params).json()
@@ -50,7 +59,7 @@ while True:
                 ### Itera a través de todos los comentarios
                 for comment in comments['data']:
                     comment['post_id'] = element['id']
-                    collection_comments.insert(comment)
+                    collection_comments.insert_one(comment)
                 comments = requests.get(this_comment_url + '&after=' + comments['paging']['cursors']['after'], params = params).json()
         #### Vamos a la siguiente página en feed
         posts = requests.get(posts['paging']['next']).json()
@@ -66,22 +75,27 @@ posts_data = []
 comments_data = []
 
 for doc in collection_posts.find({}):
-    try:
-        posts_data.append((doc['message'], doc['created_time'], doc['likes']['summary']['total_count'], doc['shares']['count'], doc['id']))
-    except:
-        print("No message")
+    if 'message' in doc.keys():
+        posts_data.append((doc['message'], doc['created_time'], doc['likes']['summary']['total_count'], doc.get('shares', {'count': 0})['count'], doc['id']))
+    else:
         pass
+        #print("No message")
+        
+print(len(posts_data))
     
 for comment in collection_comments.find({}):
-    try:
+    if 'message' in comment.keys():
         comments_data.append((comment['message'], comment['created_time'], comment['post_id']))
-    except:
+    else:
         pass
+
+print(len(comments_data))
 
 df_posts = pandas.DataFrame(posts_data)
 df_posts.columns = ['message', 'created_time', 'likes', 'shares', 'post_id']
 df_comments = pandas.DataFrame(comments_data)
 df_comments.columns = ['message', 'created_time', 'post_id']
+print(df_comments)
 
 # Feature extraction
 
@@ -90,27 +104,26 @@ df_comments.columns = ['message', 'created_time', 'post_id']
 
 # Limpia comentarios y posts
 def preprocess(text):
-    
     # Limpieza básica
     # Limpia de espacios y signos de puntuación, y convierte en minúscula
-    text  = text.strip()
+    text = text.strip()
     text = re.sub(r'[^\w\s]','',text)
     text = text.lower()
 
     # Divide en tokens
     tokens = nltk.word_tokenize(text) 
 
-    return(tokens)
+    return(tokens,)
 
 # Obtiene los hastags de los mensajes
 def get_hashtags(text):
     hashtags = re.findall(r"#(\w+)", text)
-    return(hashtags)
+    return(hashtags,)
 
 # 
 def tag_tokens(preprocessed_tokens):
     pos = nltk.pos_tag(preprocessed_tokens)
-    return(pos)
+    return(pos,)
 
 # 
 def get_keywords(tagged_tokens, pos='all'):
@@ -127,7 +140,7 @@ def get_keywords(tagged_tokens, pos='all'):
         lst_pos = ('NN','JJ','VB')
 
     keywords = [tup[0] for tup in tagged_tokens if tup[1].startswith(lst_pos)]
-    return(keywords)
+    return(keywords,)
 
 def get_noun_phrases(tagged_tokens):
 
@@ -142,20 +155,26 @@ def get_noun_phrases(tagged_tokens):
             outputs = [tup[0] for tup in subtree.leaves()]
             outputs = " ".join(outputs)
             result.append(outputs)
-    return(result)
+    return(result,)
 
 def execute_pipeline(dataframe):
-    #
+    print("Entro execute pipeline")
+    #Obtener hashtags
     dataframe['hashtags'] = dataframe.apply(lambda x: get_hashtags(x['message']), axis=1)
+    print("Paso 1")
     #
-    dataframe['preprocessed'] = dataframe.apply(lambda x: preprocess(x['message']), axis=1)
+    dataframe['preprocessed'] = dataframe.apply(lambda x: preprocess(x['message']), axis=1, reduce=True)
+    print("Paso 2")
     #
-    dataframe['tagged'] = dataframe.apply(lambda x: tag_tokens(x['preprocessed']), axis=1)
+    dataframe['tagged'] = dataframe.apply(lambda x: tag_tokens(x['preprocessed'][0]), axis=1)
+    print("Paso 3") 
+    #Extraer palabras clave
+    dataframe['keywords'] = dataframe.apply(lambda x: get_keywords(x['tagged'][0], 'all'), axis=1)
+    print("Paso 4")
     #
-    dataframe['keywords'] = dataframe.apply(lambda x: get_keywords(x['tagged'], 'all'), axis=1)
-    #
-    dataframe['noun_phrases'] = dataframe.apply(lambda x: get_noun_phrases(x['tagged']), axis=1)
-
+    dataframe['noun_phrases'] = dataframe.apply(lambda x: get_noun_phrases(x['tagged'][0]), axis=1)
+    print("Paso 5")
+    print("Salgo execute pipeline")
     return(dataframe)
 
 
