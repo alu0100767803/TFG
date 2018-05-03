@@ -8,8 +8,11 @@ import pandas
 import re
 import nltk
 import numpy
-import matplotlib
+import itertools 
 
+
+from matplotlib import pyplot as plt
+from wordcloud import WordCloud
 from pymongo import MongoClient
 from requests_oauthlib import OAuth2
 from tqdm import tqdm
@@ -184,13 +187,24 @@ df_comments = execute_pipeline(df_comments)
 #Content analysis
  
 def viz_wordcloud(dataframe, column_name):
-    lst_tokens = list(itertools.chain.from_iterable(dataframe[column_name]))
+    lst_tokens = list(itertools.chain.from_iterable(dataframe[column_name][0]))
     lst_phrases = [phrase.replace(" ", "_") for phrase in lst_tokens]
-    wordcloud = Wordcloud(font_path='/Library/Fonts/Verdana.ttf', background_color="White", max_words=2000, max_font_size=40, random_state=42).generate(" ".join(lst_phrases))
 
-    #
-    #
+    CLEANING_LIST = [] # Lista con palabras que consideraremos como ruido
+    lst_phrases = [phrase.replace("","_") for phrase in lst_phrases if not any(spam in phrase.lower() for spam in CLEANING_LIST)] # Quitamos los keywords considerados como ruido
+    lst_phrases = [phrase.replace("","_") for phrase in lst_phrases if len(phrase) > 1] # Eliminamos los tokens que son de una sola letra
+
+    wordcloud = WordCloud(font_path='./Font/Verdana.ttf', background_color="White", max_words=2000, max_font_size=40, random_state=42).generate(" ".join(lst_phrases))
+
     plt.figure()
     plt.imshow(wordcloud)
     plt.axis("off")
     plt.show
+
+def print_verbatims(df, nb_verbatim, keywords):
+    verbatims = df[df['message'].str.contains(keywords)]
+    for i, text in verbatims.head(nb_verbatim).iterrows():
+        print(text['message'])
+
+viz_wordcloud(df_posts, 'keywords')
+viz_wordcloud(df_comments, 'keywords')
