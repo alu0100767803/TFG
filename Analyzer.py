@@ -8,9 +8,11 @@ import pandas
 import re
 import nltk
 import numpy
-import itertools 
+import itertools
+import datetime 
 
 
+from ggplot import *
 from matplotlib import pyplot as plt
 from wordcloud import WordCloud
 from pymongo import MongoClient
@@ -199,12 +201,43 @@ def viz_wordcloud(dataframe, column_name):
     plt.figure()
     plt.imshow(wordcloud)
     plt.axis("off")
-    plt.show
+    plt.show()
 
 def print_verbatims(df, nb_verbatim, keywords):
     verbatims = df[df['message'].str.contains(keywords)]
     for i, text in verbatims.head(nb_verbatim).iterrows():
         print(text['message'])
 
-viz_wordcloud(df_posts, 'keywords')
-viz_wordcloud(df_comments, 'keywords')
+"""viz_wordcloud(df_posts, 'keywords')
+viz_wordcloud(df_comments, 'keywords')"""
+
+df_comments['date'] = df_comments['created_time'].apply(pandas.to_datetime)
+df_comments_ts = df_comments.set_index(['date'])
+df_comments_ts = df_comments_ts['2015-01-01':]
+
+df_posts['date'] = df_posts['created_time'].apply(pandas.to_datetime)
+df_posts_ts = df_posts.set_index(['date'])
+df_posts_ts = df_posts_ts['2015-01-01':]
+
+#Creamos un data frame que contiene la cantidad promedio de likes y shares por semana
+dx = df_posts_ts.resample('W').mean()
+dx.index.name = 'date'
+dx = dx.reset_index()
+
+#Mostramos el progreso de likes
+p = ggplot(dx, aes(x = 'date', y = 'likes')) + geom_line()
+p = p + xlab("Date") + ylab("Number of likes") + ggtitle("Facebook vacanzeTenerife Page")
+print(p)
+
+#Mostramos el progreso de shares
+p = ggplot(dx, aes(x = 'date', y = 'shares')) + geom_line()
+p = p + xlab("Date") + ylab("Number of shares") + ggtitle("Facebook VacanzeTenerife Page")
+print(p)
+
+# criterium 
+def max_wordcloud(ts_df_posts, ts_df_comments, columnname, criterium):
+    mean_week = ts_df_posts.resample('W').mean()
+    start_week = (mean_week[criterium].idxmax() - datetime.timedelta(days=7)).strftime('%Y-%m-%d')
+    end_week = mean_week[criterium].idxmax().strftime('%Y-%m-%d')
+    viz_wordcloud(ts_df_posts[start_week:end_week], columnname)
+    viz_wordcloud(ts_df_comments[start_week:end_week], columnname)
