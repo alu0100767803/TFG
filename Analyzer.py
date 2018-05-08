@@ -118,17 +118,17 @@ def preprocess(text):
     # Divide en tokens
     tokens = nltk.word_tokenize(text) 
 
-    return(tokens,)
+    return(tokens)
 
 # Obtiene los hastags de los mensajes
 def get_hashtags(text):
     hashtags = re.findall(r"#(\w+)", text)
-    return(hashtags,)
+    return(hashtags)
 
 # 
 def tag_tokens(preprocessed_tokens):
     pos = nltk.pos_tag(preprocessed_tokens)
-    return(pos,)
+    return(pos)
 
 # 
 def get_keywords(tagged_tokens, pos='all'):
@@ -145,7 +145,7 @@ def get_keywords(tagged_tokens, pos='all'):
         lst_pos = ('NN','JJ','VB')
 
     keywords = [tup[0] for tup in tagged_tokens if tup[1].startswith(lst_pos)]
-    return(keywords,)
+    return(keywords)
 
 def get_noun_phrases(tagged_tokens):
 
@@ -160,7 +160,7 @@ def get_noun_phrases(tagged_tokens):
             outputs = [tup[0] for tup in subtree.leaves()]
             outputs = " ".join(outputs)
             result.append(outputs)
-    return(result,)
+    return(result)
 
 def execute_pipeline(dataframe):
     print("Entro execute pipeline")
@@ -171,13 +171,13 @@ def execute_pipeline(dataframe):
     dataframe['preprocessed'] = dataframe.apply(lambda x: preprocess(x['message']), axis=1, reduce=True)
     print("Paso 2")
     #
-    dataframe['tagged'] = dataframe.apply(lambda x: tag_tokens(x['preprocessed'][0]), axis=1)
+    dataframe['tagged'] = dataframe.apply(lambda x: tag_tokens(x['preprocessed']), axis=1)
     print("Paso 3") 
     #Extraer palabras clave
-    dataframe['keywords'] = dataframe.apply(lambda x: get_keywords(x['tagged'][0], 'all'), axis=1)
+    dataframe['keywords'] = dataframe.apply(lambda x: get_keywords(x['tagged'], 'all'), axis=1)
     print("Paso 4")
     #
-    dataframe['noun_phrases'] = dataframe.apply(lambda x: get_noun_phrases(x['tagged'][0]), axis=1)
+    dataframe['noun_phrases'] = dataframe.apply(lambda x: get_noun_phrases(x['tagged']), axis=1)
     print("Paso 5")
     print("Salgo execute pipeline")
     return(dataframe)
@@ -189,7 +189,7 @@ df_comments = execute_pipeline(df_comments)
 #Content analysis
  
 def viz_wordcloud(dataframe, column_name):
-    lst_tokens = list(itertools.chain.from_iterable(dataframe[column_name][0]))
+    lst_tokens = list(itertools.chain.from_iterable(dataframe[column_name]))
     lst_phrases = [phrase.replace(" ", "_") for phrase in lst_tokens]
 
     CLEANING_LIST = [] # Lista con palabras que consideraremos como ruido
@@ -234,7 +234,7 @@ p = ggplot(dx, aes(x = 'date', y = 'shares')) + geom_line()
 p = p + xlab("Date") + ylab("Number of shares") + ggtitle("Facebook VacanzeTenerife Page")
 print(p)
 
-# criterium 
+
 def max_wordcloud(ts_df_posts, ts_df_comments, columnname, criterium):
     mean_week = ts_df_posts.resample('W').mean()
     start_week = (mean_week[criterium].idxmax() - datetime.timedelta(days=7)).strftime('%Y-%m-%d')
