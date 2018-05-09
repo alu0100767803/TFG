@@ -19,6 +19,10 @@ from pymongo import MongoClient
 from requests_oauthlib import OAuth2
 from tqdm import tqdm
 
+from watson_developer_cloud import NaturalLanguageUnderstandingV1
+from watson_developer_cloud.natural_language_understanding_v1 \
+  import Features, EntitiesOptions, KeywordsOptions
+
 #Base de datos 
 client = MongoClient('localhost:27017')
 db = client.db_analyzer
@@ -241,3 +245,11 @@ def max_wordcloud(ts_df_posts, ts_df_comments, columnname, criterium):
     end_week = mean_week[criterium].idxmax().strftime('%Y-%m-%d')
     viz_wordcloud(ts_df_posts[start_week:end_week], columnname)
     viz_wordcloud(ts_df_comments[start_week:end_week], columnname)
+
+
+url_api = "https://gateway.watsonplatform.net/natural-language-understanding/api"
+
+natural_language_understanding = NaturalLanguageUnderstandingV1(
+  username="209d9a26-cca5-4bef-9690-33f5e8ee66da",
+  password="SpWglqCnrHqD",
+  version='2018-03-16')
