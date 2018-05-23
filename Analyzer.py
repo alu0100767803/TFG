@@ -10,6 +10,8 @@ import nltk
 import numpy
 import itertools
 import datetime 
+import ggplot
+import tabpy_client
 
 
 from ggplot import *
@@ -21,7 +23,7 @@ from tqdm import tqdm
 
 from watson_developer_cloud import NaturalLanguageUnderstandingV1
 from watson_developer_cloud.natural_language_understanding_v1 \
-  import Features, EntitiesOptions, KeywordsOptions
+  import Features, EmotionOptions, SentimentOptions
 
 #Base de datos 
 client = MongoClient('localhost:27017')
@@ -34,7 +36,7 @@ collection_comments = db_analyzer.comments
 collection_posts.delete_many({})
 collection_comments.delete_many({})
 
-id = "tenerifevacanze"              # id de la página que va a ser analizada
+id = "VisitTenerifeES"              # id de la página que va a ser analizada
 """Páginas usadas
  * tenerifevacanze
  * VisitTenerifeES"""
@@ -48,7 +50,7 @@ print(page_url)
 comments_url = 'https://graph.facebook.com/v2.12/{post_id}/comments?filter=stream&limit=100'
 
 # Variable con el token de acceso de Facebook
-params = {'access_token' : 'EAACQFfa9JeIBAKK0ZCX9x7vGxtDjfDjLLo5W8qVz5REnvqr30DSEy4EgrZAU0RLG0AxYo2UFdfU3hUqtm3T3dEys1eZC1BDq1IRnfpZAKwDDVi6n0LqAYKgOazNbj26FOD7zPGhZCz3RlFw4ADrqIHLC3yc1m7EEZD'}
+params = {'access_token' : 'EAACQFfa9JeIBAI1wRhKxGmFTvH5BJ6GhmhrrPrWkvkh0iG29oiSGPocYWgxIYaDgkFapkxmn4ZB7bz0nVb6D0DQ2VynIZAT7gegZCkixBaXlcRZBvpCfArZB0Yfyr3HRUUJ3Epc4CJHsgNRnmlqQZCRt5QCDzU7ioZD'}
 posts = requests.get(page_url, params = params)
 posts = posts.json()
 
@@ -104,7 +106,6 @@ df_posts = pandas.DataFrame(posts_data)
 df_posts.columns = ['message', 'created_time', 'likes', 'shares', 'post_id']
 df_comments = pandas.DataFrame(comments_data)
 df_comments.columns = ['message', 'created_time', 'post_id']
-print(df_comments)
 
 # Feature extraction
 
@@ -197,10 +198,10 @@ def viz_wordcloud(dataframe, column_name):
     lst_phrases = [phrase.replace(" ", "_") for phrase in lst_tokens]
 
     CLEANING_LIST = [] # Lista con palabras que consideraremos como ruido
-    lst_phrases = [phrase.replace("","_") for phrase in lst_phrases if not any(spam in phrase.lower() for spam in CLEANING_LIST)] # Quitamos los keywords considerados como ruido
-    lst_phrases = [phrase.replace("","_") for phrase in lst_phrases if len(phrase) > 1] # Eliminamos los tokens que son de una sola letra
+    lst_phrases = [phrase.replace(" ","_") for phrase in lst_phrases if not any(spam in phrase.lower() for spam in CLEANING_LIST)] # Quitamos los keywords considerados como ruido
+    lst_phrases = [phrase.replace(" ","_") for phrase in lst_phrases if len(phrase) > 1] # Eliminamos los tokens que son de una sola letra
 
-    wordcloud = WordCloud(font_path='./Font/Verdana.ttf', background_color="White", max_words=2000, max_font_size=40, random_state=42).generate(" ".join(lst_phrases))
+    wordcloud = WordCloud(font_path='./Fonts/Verdana.ttf', background_color="White", max_words=2000, max_font_size=40, random_state=42).generate(" ".join(lst_phrases))
 
     plt.figure()
     plt.imshow(wordcloud)
@@ -212,8 +213,18 @@ def print_verbatims(df, nb_verbatim, keywords):
     for i, text in verbatims.head(nb_verbatim).iterrows():
         print(text['message'])
 
-"""viz_wordcloud(df_posts, 'keywords')
-viz_wordcloud(df_comments, 'keywords')"""
+#Mostrando las nubes de palabras
+#Keywords
+viz_wordcloud(df_posts, 'keywords')
+viz_wordcloud(df_comments, 'keywords')
+
+#Hashtaggs
+viz_wordcloud(df_posts, 'hashtags')
+viz_wordcloud(df_comments, 'hashtags')
+
+#Noun Phrases
+viz_wordcloud(df_posts, 'noun_phrases')
+viz_wordcloud(df_comments, 'noun_phrases')
 
 df_comments['date'] = df_comments['created_time'].apply(pandas.to_datetime)
 df_comments_ts = df_comments.set_index(['date'])
@@ -246,10 +257,61 @@ def max_wordcloud(ts_df_posts, ts_df_comments, columnname, criterium):
     viz_wordcloud(ts_df_posts[start_week:end_week], columnname)
     viz_wordcloud(ts_df_comments[start_week:end_week], columnname)
 
+max_wordcloud(df_posts_ts, df_comments_ts, 'keywords', 'likes')
+max_wordcloud(df_posts_ts, df_comments_ts, 'keywords','shares')
 
-url_api = "https://gateway.watsonplatform.net/natural-language-understanding/api"
 
-natural_language_understanding = NaturalLanguageUnderstandingV1(
-  username="209d9a26-cca5-4bef-9690-33f5e8ee66da",
-  password="SpWglqCnrHqD",
-  version='2018-03-16')
+"""url_api = "https://gateway.watsonplatform.net/natural-language-understanding/api"
+
+def get_sentiment(text):
+    natural_language_understanding = NaturalLanguageUnderstandingV1(
+        username="209d9a26-cca5-4bef-9690-33f5e8ee66da",
+        password="SpWglqCnrHqD",
+        version='2018-03-16')
+    try:
+        response = natural_language_understanding.analyze(
+            text=text,
+            features=Features(
+                emotion=EmotionOptions(),
+                sentiment=SentimentOptions()))
+
+        fichero = json.dumps(response, indent=2)
+        fichero = json.loads(fichero)
+
+        lenguaje = fichero['language']
+        if 'emotion' in fichero.keys():
+            emotions = fichero['emotion']['document']['emotion']
+        else:
+            emotions = None
+        sentiment = fichero['sentiment']['document']
+        return (lenguaje, emotions, sentiment)
+    except:
+        return None
+
+df_nlu = df_comments.head(10)
+df_nlu['sentiments'] = df_nlu.apply(lambda x: get_sentiment(x['message']), axis=1)
+
+emotions = []
+sentiments = []
+languages = []
+
+for p in df_nlu['sentiments']:
+    if not p == None:
+        languages.append(p[0])
+        if not p[1] == None:
+            emotions.append(p[1])
+        sentiments.append(p[2])
+
+df_emotions = pandas.DataFrame(emotions)
+df_sentiments = pandas.DataFrame(sentiments)
+df_languages = pandas.DataFrame(languages)
+
+# Mostrando la gráfica de las emociones
+df_emotions = df_emotions.apply(pandas.to_numeric, errors='ignore')
+df_emotions_means = df_emotions.transpose().apply(numpy.mean, axis=1)
+df_emotions_means.plot(kind='bar', legend=False)
+
+
+df_languages[0].value_counts().plot(kind='bar', title='Language')"""
+
+connection = tabpy_client.Client('http://localhost:9004/')

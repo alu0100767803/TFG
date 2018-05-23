@@ -11,3 +11,5 @@ matplotlib
 tqdm
 wordcloud
 ggplot
+# --upgrade watson-developer-cloud
+tabpy-client
