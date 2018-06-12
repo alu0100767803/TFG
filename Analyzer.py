@@ -109,7 +109,6 @@ df_comments.columns = ['message', 'created_time', 'post_id']
 
 # Feature extraction
 
-
 # Funciones
 
 # Limpia comentarios y posts
@@ -283,6 +282,8 @@ def get_sentiment(text):
             emotions = fichero['emotion']['document']['emotion']
         else:
             emotions = None
+
+        #sentiment = {fichero['sentiment']['document']['label']: fichero['sentiment']['document']['score']}
         sentiment = fichero['sentiment']['document']
         return (lenguaje, emotions, sentiment)
     except:
@@ -313,5 +314,3 @@ df_emotions_means.plot(kind='bar', legend=False)
 
 
 df_languages[0].value_counts().plot(kind='bar', title='Language')"""
-
-connection = tabpy_client.Client('http://localhost:9004/')
