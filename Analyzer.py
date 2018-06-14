@@ -8,18 +8,21 @@ import pandas
 import re
 import nltk
 import numpy
+import matplotlib
 import itertools
 import datetime 
 import ggplot
-import tabpy_client
+import wordcloud
+import plotly
+import plotly.plotly as py
+import plotly.graph_objs as go
 
 
 from ggplot import *
 from matplotlib import pyplot as plt
 from wordcloud import WordCloud
 from pymongo import MongoClient
-from requests_oauthlib import OAuth2
-from tqdm import tqdm
+#from requests_oauthlib import OAuth2
 
 from watson_developer_cloud import NaturalLanguageUnderstandingV1
 from watson_developer_cloud.natural_language_understanding_v1 \
@@ -36,10 +39,11 @@ collection_comments = db_analyzer.comments
 collection_posts.delete_many({})
 collection_comments.delete_many({})
 
-id = "VisitTenerifeES"              # id de la página que va a ser analizada
+id = "turismoTenerife"              # id de la página que va a ser analizada
 """Páginas usadas
  * tenerifevacanze
- * VisitTenerifeES"""
+ * VisitTenerifeES
+ * turismoTenerife"""
 
 
 
@@ -90,7 +94,6 @@ for doc in collection_posts.find({}):
         posts_data.append((doc['message'], doc['created_time'], doc['likes']['summary']['total_count'], doc.get('shares', {'count': 0})['count'], doc['id']))
     else:
         pass
-        #print("No message")
         
 print(len(posts_data))
     
@@ -122,17 +125,17 @@ def preprocess(text):
     # Divide en tokens
     tokens = nltk.word_tokenize(text) 
 
-    return(tokens)
+    return(tokens,)
 
 # Obtiene los hastags de los mensajes
 def get_hashtags(text):
     hashtags = re.findall(r"#(\w+)", text)
-    return(hashtags)
+    return(hashtags,)
 
 # 
 def tag_tokens(preprocessed_tokens):
     pos = nltk.pos_tag(preprocessed_tokens)
-    return(pos)
+    return(pos,)
 
 # 
 def get_keywords(tagged_tokens, pos='all'):
@@ -149,7 +152,7 @@ def get_keywords(tagged_tokens, pos='all'):
         lst_pos = ('NN','JJ','VB')
 
     keywords = [tup[0] for tup in tagged_tokens if tup[1].startswith(lst_pos)]
-    return(keywords)
+    return(keywords,)
 
 def get_noun_phrases(tagged_tokens):
 
@@ -164,7 +167,7 @@ def get_noun_phrases(tagged_tokens):
             outputs = [tup[0] for tup in subtree.leaves()]
             outputs = " ".join(outputs)
             result.append(outputs)
-    return(result)
+    return(result,)
 
 def execute_pipeline(dataframe):
     print("Entro execute pipeline")
@@ -172,16 +175,16 @@ def execute_pipeline(dataframe):
     dataframe['hashtags'] = dataframe.apply(lambda x: get_hashtags(x['message']), axis=1)
     print("Paso 1")
     #
-    dataframe['preprocessed'] = dataframe.apply(lambda x: preprocess(x['message']), axis=1, reduce=True)
+    dataframe['preprocessed'] = dataframe.apply(lambda x: preprocess(x['message']), axis=1)
     print("Paso 2")
     #
-    dataframe['tagged'] = dataframe.apply(lambda x: tag_tokens(x['preprocessed']), axis=1)
+    dataframe['tagged'] = dataframe.apply(lambda x: tag_tokens(x['preprocessed'][0]), axis=1)
     print("Paso 3") 
     #Extraer palabras clave
-    dataframe['keywords'] = dataframe.apply(lambda x: get_keywords(x['tagged'], 'all'), axis=1)
+    dataframe['keywords'] = dataframe.apply(lambda x: get_keywords(x['tagged'][0], 'all'), axis=1)
     print("Paso 4")
     #
-    dataframe['noun_phrases'] = dataframe.apply(lambda x: get_noun_phrases(x['tagged']), axis=1)
+    dataframe['noun_phrases'] = dataframe.apply(lambda x: get_noun_phrases(x['tagged'][0]), axis=1)
     print("Paso 5")
     print("Salgo execute pipeline")
     return(dataframe)
@@ -194,7 +197,11 @@ df_comments = execute_pipeline(df_comments)
  
 def viz_wordcloud(dataframe, column_name):
     lst_tokens = list(itertools.chain.from_iterable(dataframe[column_name]))
-    lst_phrases = [phrase.replace(" ", "_") for phrase in lst_tokens]
+    lst_p = []
+    for phrase in lst_tokens:
+        print(phrase)
+        lst_p.extend(phrase)
+    lst_phrases = [phrase.replace(" ", "_") for phrase in lst_p]
 
     CLEANING_LIST = [] # Lista con palabras que consideraremos como ruido
     lst_phrases = [phrase.replace(" ","_") for phrase in lst_phrases if not any(spam in phrase.lower() for spam in CLEANING_LIST)] # Quitamos los keywords considerados como ruido
@@ -231,7 +238,7 @@ df_comments_ts = df_comments_ts['2015-01-01':]
 
 df_posts['date'] = df_posts['created_time'].apply(pandas.to_datetime)
 df_posts_ts = df_posts.set_index(['date'])
-df_posts_ts = df_posts_ts['2015-01-01':]
+df_posts_ts = df_posts_ts[:'2015-01-01']
 
 #Creamos un data frame que contiene la cantidad promedio de likes y shares por semana
 dx = df_posts_ts.resample('W').mean()
@@ -253,64 +260,167 @@ def max_wordcloud(ts_df_posts, ts_df_comments, columnname, criterium):
     mean_week = ts_df_posts.resample('W').mean()
     start_week = (mean_week[criterium].idxmax() - datetime.timedelta(days=7)).strftime('%Y-%m-%d')
     end_week = mean_week[criterium].idxmax().strftime('%Y-%m-%d')
-    viz_wordcloud(ts_df_posts[start_week:end_week], columnname)
+    viz_wordcloud(ts_df_posts[end_week:start_week], columnname)
     viz_wordcloud(ts_df_comments[start_week:end_week], columnname)
 
 max_wordcloud(df_posts_ts, df_comments_ts, 'keywords', 'likes')
 max_wordcloud(df_posts_ts, df_comments_ts, 'keywords','shares')
 
 
-"""url_api = "https://gateway.watsonplatform.net/natural-language-understanding/api"
+url_api = "https://gateway.watsonplatform.net/natural-language-understanding/api"
 
 def get_sentiment(text):
-    natural_language_understanding = NaturalLanguageUnderstandingV1(
-        username="209d9a26-cca5-4bef-9690-33f5e8ee66da",
-        password="SpWglqCnrHqD",
-        version='2018-03-16')
     try:
+        natural_language_understanding = NaturalLanguageUnderstandingV1(
+            username="209d9a26-cca5-4bef-9690-33f5e8ee66da",
+            password="SpWglqCnrHqD",
+            version='2018-03-16')
         response = natural_language_understanding.analyze(
             text=text,
             features=Features(
                 emotion=EmotionOptions(),
                 sentiment=SentimentOptions()))
-
-        fichero = json.dumps(response, indent=2)
-        fichero = json.loads(fichero)
-
-        lenguaje = fichero['language']
-        if 'emotion' in fichero.keys():
-            emotions = fichero['emotion']['document']['emotion']
-        else:
-            emotions = None
-
-        #sentiment = {fichero['sentiment']['document']['label']: fichero['sentiment']['document']['score']}
-        sentiment = fichero['sentiment']['document']
-        return (lenguaje, emotions, sentiment)
+        
+        return json.dumps(response, indent=2)
     except:
         return None
 
-df_nlu = df_comments.head(10)
-df_nlu['sentiments'] = df_nlu.apply(lambda x: get_sentiment(x['message']), axis=1)
+print("Iniciando Análisis de sentiminetos")
+
+df_nlu = df_comments
+df_nlu['nlu'] = df_nlu.apply(lambda x: get_sentiment(x['message']), axis=1)
 
 emotions = []
 sentiments = []
 languages = []
 
-for p in df_nlu['sentiments']:
+for p in df_nlu['nlu']:
     if not p == None:
-        languages.append(p[0])
-        if not p[1] == None:
-            emotions.append(p[1])
-        sentiments.append(p[2])
+        fichero = json.loads(p)
+        languages.append(fichero['language'])
+        sentiments.append((fichero['sentiment']['document']['label'], fichero['sentiment']['document']['score']))
+        if 'emotion' in fichero.keys():
+            emotions.append( fichero['emotion']['document']['emotion'])
 
 df_emotions = pandas.DataFrame(emotions)
 df_sentiments = pandas.DataFrame(sentiments)
+df_sentiments.columns = ['label', 'score']
 df_languages = pandas.DataFrame(languages)
+df_languages.columns = ['languages']
+
+positive = []
+negative = []
+
+for i in df_sentiments['score']:
+    if i > 0:
+        positive.append(i)
+    elif i < 0:
+        negative.append(i)
+
+median_positive = numpy.median(positive)
+median_negative = numpy.median(negative)
 
 # Mostrando la gráfica de las emociones
 df_emotions = df_emotions.apply(pandas.to_numeric, errors='ignore')
 df_emotions_means = df_emotions.transpose().apply(numpy.mean, axis=1)
 df_emotions_means.plot(kind='bar', legend=False)
+plt.show()
 
+#Mostrando gráfica de lenguajes
+df_languages['languages'].value_counts().plot(kind='bar', title='Languages')
+plt.show()
 
-df_languages[0].value_counts().plot(kind='bar', title='Language')"""
+#Mostrando gráfica de sentimientos
+df_sentiments['label'].value_counts().plot(kind='bar', title="Sentiments")
+plt.show()
+
+#Mostrando score de sentimientos
+score_sentiments = {'positive': median_positive, 'negative': median_negative}
+#score_sentiments.plot(kind='bar', title="Score sentiments")
+
+#Métodos para mostrar datos usando plotly
+def bar_plotly(x, y, title):
+    plotly.offline.init_notebook_mode(connected=True)
+    x = x
+    y = y
+
+    trace = go.Bar(
+                x=x,
+                y=y,)
+
+    data = [trace]
+    layout = go.Layout(title=title,height=1 )
+    fig = go.Figure(data=data, layout=layout)
+    
+    plotly.offline.iplot(fig)
+    
+def bar_plotly_file(x, y, title, filename):
+    x = x
+    y = y
+
+    trace = go.Bar(
+                x=x,
+                y=y)
+
+    data = [trace]
+    layout = go.Layout(
+        title=title,
+        )
+    fig = go.Figure(data=data, layout=layout)
+    
+    plotly.offline.plot(fig, filename=filename + '.html')
+    
+def grafica_plotly(labels, values, title):
+    plotly.offline.init_notebook_mode(connected=True)
+    
+    fig = {
+    'data': [{'labels': labels,
+              'values': values,
+              'type': 'pie'}],
+    'layout': {'title': title}
+     }
+
+    plotly.offline.iplot(fig)
+    
+def grafica_plotly_file(labels, values, title, filename):
+    
+    fig = {
+    'data': [{'labels': labels,
+              'values': values,
+              'type': 'pie'}],
+    'layout': {'title': title}
+     }
+
+    plotly.offline.plot(fig, filename=filename + '.html')
+
+#Mostrando lenguajes con plotly 
+labels_languages = df_languages['languages'].value_counts().keys().tolist()
+values_languages = df_languages['languages'].value_counts().tolist()
+
+grafica_plotly_file(labels_languages, values_languages, 'Grafica lenguajes', 'g_lenguajes')
+bar_plotly_file(labels_languages, values_languages, 'Lenguajes', 'lenguajes')
+#grafica_plotly(labels_languages, values_languages, 'Grafica lenguajes')
+#bar_plotly(labels_languages, values_languages, 'Lenguajes')
+
+#Mostrando emociones con plotly
+labels_emotions = df_emotions_means.keys().tolist()
+values_emotions = df_emotions_means.tolist()
+
+grafica_plotly_file(labels_emotions, values_emotions, 'Gráfica emociones', 'g_emociones')
+bar_plotly_file(labels_emotions, values_emotions,'Emociones', 'emociones')
+#grafica_plotly(labels_emotions, values_emotions, 'Gráfica emociones')
+#bar_plotly(labels_emotions, values_emotions,'Emociones')
+
+#Mostrando sentimientos con plotly
+labels_sentiments = df_sentiments['label'].value_counts().keys().tolist()
+values_sentiments = df_sentiments['label'].value_counts().tolist()
+
+grafica_plotly_file(labels_sentiments, values_sentiments, 'Gráfica sentimientos', 'g_sentimientos')
+bar_plotly_file(labels_sentiments, values_sentiments,'Sentimientos', 'sentimientos')
+#grafica_plotly(labels_sentiments, values_sentiments, 'Gráfica sentimientos')
+#bar_plotly(labels_sentiments, values_sentiments,'Sentimientos')
+
+labels_median = ['positive', 'negative']
+values_median = [median_positive, median_negative]
+
+bar_plotly_file(labels_median, values_median, 'Score sentiments', 'score_sentiments')
