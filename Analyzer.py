@@ -196,8 +196,10 @@ def viz_wordcloud(dataframe, column_name, title):
     for phrase in lst_tokens:
         lst_p.extend(phrase)
     lst_phrases = [phrase.replace(" ", "_") for phrase in lst_p]
-
-    CLEANING_LIST = [] # Lista con palabras que consideraremos como ruido
+    if column_name == 'keywords':
+        CLEANING_LIST = ['que', 'el', 'la', 'un', 'lo', 'del', 'para', 'en', 'al', 'por'] # Lista con palabras que consideraremos como ruido
+    else:
+        CLEANING_LIST = []
     # Quitamos los elementos considerados como ruido
     lst_phrases = [phrase.replace(" ","_") for phrase in lst_phrases if not any(spam in phrase.lower() for spam in CLEANING_LIST)] 
     # Eliminamos los tokens que son de una sola letra
@@ -239,7 +241,7 @@ df_posts_ts = df_posts.set_index(['date'])
 df_posts_ts = df_posts_ts[:'2015-01-01']
 
 #Creamos un data frame que contiene la cantidad promedio de likes y shares por semana
-dx = df_posts_ts.resample('D').mean()
+dx = df_posts_ts.resample('D').mean() #.seample('W')
 dx.index.name = 'date'
 dx = dx.reset_index()
 
@@ -255,11 +257,12 @@ print(p)
 
 
 def max_wordcloud(ts_df_posts, ts_df_comments, columnname, criterium, title):
-    mean_week = ts_df_posts.resample('W').mean()
-    start_week = (mean_week[criterium].idxmax() - datetime.timedelta(days=7)).strftime('%Y-%m-%d')
+    mean_week = ts_df_posts.resample('D').mean() #.resample('W')
+    #start_week = (mean_week[criterium].idxmax() - datetime.timedelta(days=7)).strftime('%Y-%m-%d')
     end_week = mean_week[criterium].idxmax().strftime('%Y-%m-%d')
-    viz_wordcloud(ts_df_posts[end_week:start_week], columnname, title + ' en publicaciones')
-    viz_wordcloud(ts_df_comments[start_week:end_week], columnname, title + ' en comentarios')
+
+    viz_wordcloud(ts_df_posts[end_week], columnname, title + ' en publicaciones')
+    viz_wordcloud(ts_df_comments[end_week], columnname, title + ' en comentarios')
 
 # Palabras clave
 max_wordcloud(df_posts_ts, df_comments_ts, 'keywords', 'likes', 'Palabras clave en máximo de me gustas')
@@ -296,36 +299,44 @@ print("Iniciando Análisis de sentiminetos")
 
 df_nlu = df_comments
 df_nlu['nlu'] = df_nlu.apply(lambda x: get_sentiment(x['message']), axis=1)
-
+print("Terminado análisis de sentimientos")
 emotions = []
 sentiments = []
 languages = []
 
-for p in df_nlu['nlu']:
+for index, p in enumerate(df_nlu['nlu']):
     if not p == None:
         fichero = json.loads(p)
         languages.append(fichero['language'])
-        sentiments.append((fichero['sentiment']['document']['label'], fichero['sentiment']['document']['score']))
+        sentiments.append((df_nlu['message'][index], fichero['sentiment']['document']['label'], fichero['sentiment']['document']['score']))
         if 'emotion' in fichero.keys():
             emotions.append( fichero['emotion']['document']['emotion'])
 
 df_emotions = pandas.DataFrame(emotions)
 df_sentiments = pandas.DataFrame(sentiments)
-df_sentiments.columns = ['label', 'score']
+df_sentiments.columns = ['message', 'label', 'score']
 df_languages = pandas.DataFrame(languages)
 df_languages.columns = ['languages']
 
 positive = []
 negative = []
 
-for i in df_sentiments['score']:
+for index, i in enumerate(df_sentiments['score']):
     if i > 0:
-        positive.append(i)
+        positive.append((df_sentiments['message'][index], i))
     elif i < 0:
-        negative.append(i)
+        negative.append((df_sentiments['message'][index], i))
 
-median_positive = numpy.median(positive)
-median_negative = numpy.median(negative)
+df_positive = pandas.DataFrame(positive)
+df_positive.columns = ['message', 'score']
+df_negative = pandas.DataFrame(negative)
+df_negative.columns = ['message', 'score']
+
+df_positive = execute_pipeline(df_positive)
+df_negative = execute_pipeline(df_negative)
+
+median_positive = df_positive['score'].median()
+median_negative = df_negative['score'].median()
 
 # Mostrando la gráfica de las emociones
 df_emotions = df_emotions.apply(pandas.to_numeric, errors='ignore')
@@ -424,3 +435,13 @@ labels_median = ['positive', 'negative']
 values_median = [median_positive, median_negative]
 
 bar_plotly_file(labels_median, values_median, 'Puntuación sentimientos', 'score_sentiments')
+
+# Mostrando palabras clave, hashtags y frases nominales de los mensajes con sentimientos positivos
+viz_wordcloud(df_positive, 'keywords', 'Palabras clave en comentarios positivos')
+viz_wordcloud(df_positive, 'hashtags', 'Hashtags en comentarios positivos')
+viz_wordcloud(df_positive, 'noun_phrases', 'Frases nominales en comentarios positivos')
+
+# Mostrando palabras clave, hashtags y frases nominales de los mensajes con sentimientos negativos
+viz_wordcloud(df_negative, 'keywords', 'Palabras clave en comentarios negativos')
+viz_wordcloud(df_negative, 'hashtags', 'Hashtags en comentarios negativos')
+viz_wordcloud(df_negative, 'noun_phrases', 'Frases nominales en comentarios negativos')
