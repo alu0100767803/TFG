@@ -382,7 +382,7 @@ def bar_plotly_file(x, y, title, filename):
         )
     fig = go.Figure(data=data, layout=layout)
     
-    plotly.offline.plot(fig, filename=filename + '.html')
+    plotly.offline.plot(fig, filename=+ filename + '.html')
 
 def cir_plotly_file(labels, values, title, filename):
     
